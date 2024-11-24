@@ -40,6 +40,7 @@
         >ESPHome YAML format</a
       >. Currently only supports NECext signals. You can either upload a file or
       paste the content below.
+      <a href="#" onclick="loadExample()">Example.</a>
     </p>
 
     <input type="file" id="fileInput" />
@@ -88,6 +89,49 @@
             reader.readAsText(file);
           }
         });
+
+      function loadExample() {
+        document.getElementById("inputText").value = `Filetype: IR signals file
+Version: 1
+#
+name: On
+type: parsed
+protocol: NECext
+address: A6 E8 00 00
+command: 01 FE 00 00
+#
+name: Off
+type: parsed
+protocol: NECext
+address: A6 E8 00 00
+command: 00 FF 00 00
+#
+name: 2h
+type: parsed
+protocol: NECext
+address: A6 E8 00 00
+command: 0C F3 00 00
+#
+name: 4h
+type: parsed
+protocol: NECext
+address: A6 E8 00 00
+command: 09 F6 00 00
+#
+name: 6h
+type: parsed
+protocol: NECext
+address: A6 E8 00 00
+command: 0A F5 00 00
+#
+name: 8h
+type: parsed
+protocol: NECext
+address: A6 E8 00 00
+command: 15 EA 00 00
+`;
+        convertFile();
+      }
 
       function convertFile() {
         const input = document.getElementById("inputText").value.trim();
