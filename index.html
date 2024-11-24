@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flipper to ESPHome Infrared Converter</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        max-width: 600px;
+      }
+      a {
+        color: #039be5;
+      }
+      textarea {
+        width: 100%;
+        height: 150px;
+      }
+      button {
+        margin-top: 10px;
+      }
+      footer {
+        margin-top: 30px;
+        font-size: 0.9em;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Flipper to ESPHome Infrared Converter</h1>
+    <p>
+      Convert your
+      <a
+        href="https://developer.flipper.net/flipperzero/doxygen/infrared_file_format.html"
+        >Flipper IR file</a
+      >
+      to
+      <a href="https://esphome.io/components/remote_transmitter"
+        >ESPHome YAML format</a
+      >. Currently only supports NECext signals. You can either upload a file or
+      paste the content below.
+    </p>
+
+    <input type="file" id="fileInput" />
+    <br /><br />
+    <textarea
+      id="inputText"
+      placeholder="Or paste your Flipper IR code here..."
+    ></textarea>
+    <br />
+    <button onclick="convertFile()">Convert</button>
+    <br /><br />
+    <textarea
+      id="outputText"
+      readonly
+      placeholder="Your ESPHome YAML output will appear here..."
+    ></textarea>
+    <br />
+    <button onclick="copyToClipboard()">Copy to Clipboard</button>
+    <button onclick="downloadYAML()">Download as YAML</button>
+
+    <footer>
+      <p>
+        Find this project on
+        <a
+          href="https://github.com/balloob/flipper-ir-to-esphome"
+          target="_blank"
+          >GitHub</a
+        >.
+      </p>
+      <p>
+        If you like ESPHome, consider supporting the
+        <a href="https://www.openhomefoundation.org" target="_blank"
+          >Open Home Foundation</a
+        >.
+      </p>
+    </footer>
+
+    <script>
+      document
+        .getElementById("fileInput")
+        .addEventListener("change", function () {
+          const file = this.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+              document.getElementById("inputText").value = e.target.result;
+            };
+            reader.readAsText(file);
+          }
+        });
+
+      function convertFile() {
+        const input = document.getElementById("inputText").value.trim();
+        const parsed = parseIRFile(input);
+        console.log(parsed);
+        if (
+          parsed.header.Filetype !== "IR signals file" ||
+          parsed.header.Version !== "1"
+        ) {
+          alert("Unsupported file.");
+          return;
+        }
+
+        const output = convertToESPHome(parsed);
+        document.getElementById("outputText").value = output;
+      }
+
+      function parseIRFile(fileContent) {
+        const lines = fileContent.split("\n");
+        const result = {
+          header: {},
+          signals: [],
+        };
+
+        let currentSignal = null;
+        let inHeader = true;
+
+        lines.forEach((line) => {
+          line = line.trim();
+          if (line === "#") {
+            inHeader = false;
+            if (currentSignal) {
+              result.signals.push(currentSignal);
+              currentSignal = null;
+            }
+          } else if (inHeader) {
+            const [key, value] = line.split(": ").map((str) => str.trim());
+            result.header[key] = value;
+          } else {
+            if (!currentSignal) currentSignal = {};
+            const [key, value] = line.split(": ").map((str) => str.trim());
+
+            if (key == "address" || key == "command") {
+              currentSignal[key] = "0x" + value.split(" ").reverse().join("");
+            } else {
+              currentSignal[key] = value;
+            }
+          }
+        });
+
+        // Push the last signal if it exists
+        if (currentSignal) {
+          result.signals.push(currentSignal);
+        }
+
+        return result;
+      }
+
+      function convertToESPHome(input) {
+        // Verify all signals are NECext
+        if (
+          input.signals.some(
+            (signal) =>
+              signal.protocol !== "NECext" || signal.type !== "parsed",
+          )
+        ) {
+          alert("Only NECext parsed signals are supported.");
+          return;
+        }
+
+        let yamlOutput = `remote_transmitter:
+  # Replace this with the pin of your IR LED
+  pin: GPIO12
+  carrier_duty_percent: 50%
+
+button:
+`;
+
+        input.signals.forEach((command, index) => {
+          yamlOutput += `  - platform: template
+    name: "${command.name || `Unnamed ${index + 1}`}"
+    on_press:
+      remote_transmitter.transmit_nec:
+        address: ${command.address}
+        command: ${command.command}
+
+`;
+        });
+        return yamlOutput;
+      }
+
+      function copyToClipboard() {
+        const outputText = document.getElementById("outputText");
+        outputText.select();
+        document.execCommand("copy");
+        alert("Copied to clipboard");
+      }
+
+      function downloadYAML() {
+        const outputText = document.getElementById("outputText").value;
+        const blob = new Blob([outputText], { type: "text/yaml" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "converted.yaml";
+        link.click();
+      }
+    </script>
+  </body>
+</html>
